@@ -21,7 +21,6 @@ import org.anddev.andengine.util.Debug;
 import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,9 +29,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import ru.nsu.ccfit.zuev.audio.BassSoundProvider;
+import ru.nsu.ccfit.zuev.osu.helper.FileUtils;
 import ru.nsu.ccfit.zuev.osu.helper.QualityAssetBitmapSource;
 import ru.nsu.ccfit.zuev.osu.helper.QualityFileBitmapSource;
 import ru.nsu.ccfit.zuev.osu.helper.ScaledBitmapSource;
+import ru.nsu.ccfit.zuev.skins.OsuSkin;
+import ru.nsu.ccfit.zuev.skins.SkinJsonReader;
+import ru.nsu.ccfit.zuev.skins.SkinManager;
 
 public class ResourceManager {
     private static ResourceManager mgr = new ResourceManager();
@@ -88,18 +91,10 @@ public class ResourceManager {
         loadTexture("::track2", "gfx/slidertrack.png", false);
         loadTexture("::trackborder", "gfx/sliderborder.png", false,
                 TextureOptions.BILINEAR_PREMULTIPLYALPHA);
-        loadTexture("ranking_button", "ranking_button.png", false);
         loadTexture("ranking_enabled", "ranking_enabled.png", false);
         loadTexture("ranking_disabled", "ranking_disabled.png", false);
-        loadTexture("ranking_ranked", "ranking_ranked.png", false);
-        loadTexture("ranking_loved", "ranking_loved.png", false);
-        loadTexture("ranking_latest", "ranking_latest.png", false);
-        loadTexture("ranking_download", "ranking_download.png", false);
-        loadTexture("ranking_unknown", "ranking_unknown.png", false);
-        loadTexture("ranking_unsubmitted", "ranking_unsubmitted.png", false);
-        loadTexture("ranking_nextpage", "ranking_nextpage.png", false);
-        
-        loadTexture("flashlight_cursor", "flashlight_cursor.png", false);
+        loadTexture("flashlight_cursor", "flashlight_cursor.png", false, TextureOptions.BILINEAR_PREMULTIPLYALPHA);
+
         if (textures.containsKey("lighting") == false)
             textures.put("lighting", null);
 //		textures.put("fail-background", null);
@@ -117,7 +112,7 @@ public class ResourceManager {
             if (!skinFolder.exists()) {
                 skinFolder = null;
             } else {
-                skinFiles = skinFolder.listFiles();
+                skinFiles = FileUtils.listFiles(skinFolder);
             }
         }
         if (skinFiles != null) {
@@ -125,14 +120,14 @@ public class ResourceManager {
             File skinJson = new File(folder, "skin.json");
             if (skinJson.exists()) {
                 try {
-                    skinjson = new JSONObject(SkinJson.readFull(skinJson));
+                    skinjson = new JSONObject(OsuSkin.readFull(skinJson));
                 } catch (Exception e) {
                     e.printStackTrace();
                     skinjson = null;
                 }
             }
             if (skinjson == null) skinjson = new JSONObject();
-            SkinJson.get().loadSkinJson(skinjson);
+            SkinJsonReader.getReader().supplyJson(skinjson);
         }
         final Map<String, File> availableFiles = new HashMap<String, File>();
         if (skinFiles != null) {
@@ -142,7 +137,12 @@ public class ResourceManager {
                             && (f.getName().endsWith(".wav") || f.getName().endsWith(".mp3"))) {
                         continue;
                     }
-                    if (f.getName().length() < 5) continue;
+                    if (f.getName().length() < 5) {
+                        continue;
+                    }
+                    if (f.length() == 0) {
+                        continue;
+                    }
                     final String filename = f.getName().substring(0, f.getName().length() - 4);
                     availableFiles.put(filename, f);
                     //if ((filename.startsWith("hit0") || filename.startsWith("hit50") || filename.startsWith("hit100") || filename.startsWith("hit300"))){
@@ -302,13 +302,6 @@ public class ResourceManager {
         loadTexture("ranking_button", "ranking_button.png", false);
         loadTexture("ranking_enabled", "ranking_enabled.png", false);
         loadTexture("ranking_disabled", "ranking_disabled.png", false);
-        loadTexture("ranking_ranked", "ranking_ranked.png", false);
-        loadTexture("ranking_loved", "ranking_loved.png", false);
-        loadTexture("ranking_latest", "ranking_latest.png", false);
-        loadTexture("ranking_download", "ranking_download.png", false);
-        loadTexture("ranking_unknown", "ranking_unknown.png", false);
-        loadTexture("ranking_unsubmitted", "ranking_unsubmitted.png", false);
-        loadTexture("ranking_nextpage", "ranking_nextpage.png", false);
         if (textures.containsKey("lighting") == false)
             textures.put("lighting", null);
 //		textures.put("fail-background", null);
@@ -568,15 +561,8 @@ public class ResourceManager {
     }
 
     public void loadHighQualityFileUnderFolder(File folder) {
-        File[] files = folder.listFiles(new FileFilter() {
-            @Override
-            public boolean accept(File pathname) {
-                return pathname.isDirectory()
-                        || pathname.getName().toLowerCase().endsWith(".png")
-                        || pathname.getName().toLowerCase().endsWith(".jpg")
-                        || pathname.getName().toLowerCase().endsWith(".bmp");
-            }
-        });
+        File[] files = FileUtils.listFiles(folder, new String[]{
+            ".png", ".jpg", ".bmp"});
         for (File file : files) {
             if (file.isDirectory()) {
                 loadHighQualityFileUnderFolder(file);
@@ -615,7 +601,7 @@ public class ResourceManager {
 
     public BassSoundProvider loadSound(final String resname, final String file,
                                        final boolean external) {
-        BassSoundProvider snd = new BassSoundProvider(Config.getSoundVolume());
+        BassSoundProvider snd = new BassSoundProvider();
         if (external) {
             //若是来自储存文件
             try {
@@ -652,7 +638,7 @@ public class ResourceManager {
     }
 
     public void loadCustomSound(final File file) {
-        BassSoundProvider snd = new BassSoundProvider(Config.getSoundVolume());
+        BassSoundProvider snd = new BassSoundProvider();
         String resName = file.getName();
         resName = resName.substring(0, resName.length() - 4);
         if (resName.length() == 0) {
@@ -774,6 +760,26 @@ public class ResourceManager {
             }
         } else {
             customTextures.put(resname, region);
+
+            if (resname.equals("hitcircle")) {
+                if (!customTextures.containsKey("sliderstartcircle")) {
+                    customTextures.put("sliderstartcircle", region);
+                }
+
+                if (!customTextures.containsKey("sliderendcircle")) {
+                    customTextures.put("sliderendcircle", region);
+                }
+            }
+
+            if (resname.equals("hitcircleoverlay")) {
+                if (!customTextures.containsKey("sliderstartcircleoverlay")) {
+                    customTextures.put("sliderstartcircleoverlay", region);
+                }
+
+                if (!customTextures.containsKey("sliderendcircleoverlay")) {
+                    customTextures.put("sliderendcircleoverlay", region);
+                }
+            }
         }
     }
 

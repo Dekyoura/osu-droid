@@ -23,7 +23,7 @@ class BuildTypeNoticeFragment : BaseFragment() {
         findViewById<View>(R.id.button_view_changelist)!!.setOnClickListener {
             var markdown: String?
             try {
-                val `in` = context!!.assets.open("app/changelog.md")
+                val `in` = requireContext().assets.open("app/changelog.md")
                 markdown = StreamUtils.readFully(`in`)
                 `in`.close()
             } catch (e: IOException) {
@@ -53,7 +53,8 @@ class BuildTypeNoticeFragment : BaseFragment() {
         /*View icon = findViewById(R.id.warning_icon);
         Animation anim = AnimationUtils.loadAnimation(getContext(), R.anim.warning_rotate);
         anim.setInterpolator(EasingHelper.asInterpolator(Easing.InOutQuad));
-        icon.startAnimation(anim);*/body.postDelayed({ dismiss() }, 6000)
+        icon.startAnimation(anim);*/
+        body.postDelayed({ dismiss() }, 6000)
     }
 
     protected fun playOnDismissAnim(runnable: Runnable?) {

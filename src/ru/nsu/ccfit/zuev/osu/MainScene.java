@@ -1,9 +1,7 @@
 package ru.nsu.ccfit.zuev.osu;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.PointF;
 import android.net.Uri;
@@ -12,7 +10,6 @@ import android.os.PowerManager;
 import android.util.Log;
 
 import com.edlplan.ui.fragment.ConfirmDialogFragment;
-import com.umeng.analytics.MobclickAgent;
 
 import org.anddev.andengine.engine.handler.IUpdateHandler;
 import org.anddev.andengine.entity.IEntity;
@@ -129,11 +126,14 @@ public class MainScene implements IUpdateHandler {
     private float showPassTime = 0, syncPassedTime = 0;
     private float menuBarX = 0, playY, optionsY, exitY;
 
+
     public void load(Context context) {
         this.context = context;
         Debug.i("Load: mainMenuLoaded()");
         scene = new Scene();
+
         final TextureRegion tex = ResourceManager.getInstance().getTexture("menu-background");
+        
         if (tex != null) {
             float height = tex.getHeight();
             height *= Config.getRES_WIDTH()
@@ -212,16 +212,18 @@ public class MainScene implements IUpdateHandler {
                     new AsyncTaskLoader().execute(new OsuAsyncCallback() {
                         public void run() {
                             GlobalManager.getInstance().getEngine().setScene(new LoadingScreen().getScene());
+                            GlobalManager.getInstance().getMainActivity().checkNewSkins();
                             GlobalManager.getInstance().getMainActivity().checkNewBeatmaps();
-                            if (!LibraryManager.getInstance().loadLibraryCache(GlobalManager.getInstance().getMainActivity(), false)) {
+                            if (!LibraryManager.getInstance().loadLibraryCache(GlobalManager.getInstance().getMainActivity(), true)) {
                                 LibraryManager.getInstance().scanLibrary(GlobalManager.getInstance().getMainActivity());
+                                System.gc();
                             }
                             GlobalManager.getInstance().getSongMenu().reload();
-                            //To fixed skin load bug in some Android 10
+                            /* To fixed skin load bug in some Android 10
                             if (Build.VERSION.SDK_INT >= 29) {
                                 String skinNow = Config.getSkinPath();
                                 ResourceManager.getInstance().loadSkin(skinNow);
-                            }
+                            } */
                         }
 
                         public void onComplete() {
@@ -257,10 +259,12 @@ public class MainScene implements IUpdateHandler {
                     setColor(1, 1, 1);
                     if (isOnExitAnim) return true;
                     GlobalManager.getInstance().getSongService().setGaming(true);
-                    GlobalManager.getInstance().getSongService().setIsSettingMenu(true);
-                    final Intent intent = new Intent(GlobalManager.getInstance().getMainActivity(),
+                    // GlobalManager.getInstance().getSongService().setIsSettingMenu(true);
+                    /* final Intent intent = new Intent(GlobalManager.getInstance().getMainActivity(),
                             SettingsMenu.class);
-                    GlobalManager.getInstance().getMainActivity().startActivity(intent);
+                    GlobalManager.getInstance().getMainActivity().startActivity(intent); */
+                    GlobalManager.getInstance().getMainActivity().runOnUiThread(() ->
+                        new SettingsMenu().show());
                     return true;
                 }
                 return super.onAreaTouched(pSceneTouchEvent, pTouchAreaLocalX,
@@ -312,9 +316,14 @@ public class MainScene implements IUpdateHandler {
             public boolean onAreaTouched(final TouchEvent pSceneTouchEvent,
                                          final float pTouchAreaLocalX, final float pTouchAreaLocalY) {
                 if (pSceneTouchEvent.isActionDown()) {
-                    final Intent browserIntent = new Intent(Intent.ACTION_VIEW,
-                            Uri.parse("http://osu.ppy.sh"));
-                    GlobalManager.getInstance().getMainActivity().startActivity(browserIntent);
+                    new ConfirmDialogFragment().setMessage(R.string.dialog_visit_osu_website_message).showForResult(
+                        isAccepted -> {
+                            if(isAccepted) {
+                                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://osu.ppy.sh"));
+                                GlobalManager.getInstance().getMainActivity().startActivity(browserIntent);
+                            }
+                        }
+                    );
                     return true;
                 }
                 return false;
@@ -330,9 +339,14 @@ public class MainScene implements IUpdateHandler {
             public boolean onAreaTouched(final TouchEvent pSceneTouchEvent,
                                          final float pTouchAreaLocalX, final float pTouchAreaLocalY) {
                 if (pSceneTouchEvent.isActionDown()) {
-                    final Intent browserIntent = new Intent(Intent.ACTION_VIEW,
-                            Uri.parse("http://ops.dgsrz.com"));
-                    GlobalManager.getInstance().getMainActivity().startActivity(browserIntent);
+                    new ConfirmDialogFragment().setMessage(R.string.dialog_visit_osudroid_website_message).showForResult(
+                        isAccepted -> {
+                            if(isAccepted) {
+                                Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://" + OnlineManager.hostname));
+                                GlobalManager.getInstance().getMainActivity().startActivity(browserIntent);
+                            }
+                        }
+                    );
                     return true;
                 }
                 return false;
@@ -579,9 +593,11 @@ public class MainScene implements IUpdateHandler {
         createOnlinePanel(scene);
         scene.registerUpdateHandler(this);
 
-        ResourceManager.getInstance().loadSound("welcome", "sfx/welcome.wav", false).play();
-
-        hitsound = ResourceManager.getInstance().loadSound("menuhit", "sfx/menuhit.wav", false);
+        String[] welcomeSounds = {"welcome", "welcome_piano"};
+        int randNum = new Random().nextInt((1 - 0) + 1) + 0;
+        String welcomeSound = welcomeSounds[randNum];
+        ResourceManager.getInstance().loadSound(welcomeSound, String.format("sfx/%s.ogg", welcomeSound), false).play();
+        hitsound = ResourceManager.getInstance().loadSound("menuhit", "sfx/menuhit.ogg", false);
 
         /*if (BuildConfig.DEBUG) {
             SupportSprite supportSprite = new SupportSprite(Config.getRES_WIDTH(), Config.getRES_HEIGHT()) {
@@ -861,6 +877,7 @@ public class MainScene implements IUpdateHandler {
                 }
                 progressBar.setStartTime(0);
                 GlobalManager.getInstance().getSongService().play();
+                GlobalManager.getInstance().getSongService().setVolume(Config.getBgmVolume());
                 if (lastTimingPoint != null) {
                     offset = lastTimingPoint.getTime() * 1000f % bpmLength;
                 }
@@ -1010,7 +1027,10 @@ public class MainScene implements IUpdateHandler {
 
             if (selectedTrack.getBackground() != null) {
                 try {
-                    final TextureRegion tex = ResourceManager.getInstance().loadBackground(selectedTrack.getBackground());
+                    final TextureRegion tex = Config.isSafeBeatmapBg() ?
+                        ResourceManager.getInstance().getTexture("menu-background") :
+                        ResourceManager.getInstance().loadBackground(selectedTrack.getBackground());
+
                     if (tex != null) {
                         float height = tex.getHeight();
                         height *= Config.getRES_WIDTH()
@@ -1083,15 +1103,11 @@ public class MainScene implements IUpdateHandler {
         GlobalManager.getInstance().getMainActivity().runOnUiThread(new Runnable() {
             public void run() {
                 new ConfirmDialogFragment().setMessage(R.string.dialog_exit_message).showForResult(
-                        isAccepted -> {
-                            if (isAccepted) {
-                                exit();
-                                PowerManager.WakeLock wakeLock = GlobalManager.getInstance().getMainActivity().getWakeLock();
-                                if (wakeLock != null && wakeLock.isHeld()) {
-                                    wakeLock.release();
-                                }
-                            }
+                    isAccepted -> {
+                        if (isAccepted) {
+                            exit();
                         }
+                    }
                 );
             }
         });
@@ -1103,6 +1119,11 @@ public class MainScene implements IUpdateHandler {
         }
         isOnExitAnim = true;
 
+        PowerManager.WakeLock wakeLock = GlobalManager.getInstance().getMainActivity().getWakeLock();
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+
         scene.unregisterTouchArea(play);
         scene.unregisterTouchArea(options);
         scene.unregisterTouchArea(exit);
@@ -1111,7 +1132,13 @@ public class MainScene implements IUpdateHandler {
         options.setAlpha(0);
         exit.setAlpha(0);
 
-        ResourceManager.getInstance().loadSound("seeya", "sfx/seeya.wav", false).play();
+        //ResourceManager.getInstance().loadSound("seeya", "sfx/seeya.wav", false).play();
+        //Allow customize Seeya Sounds from Skins
+        BassSoundProvider exitsound = ResourceManager.getInstance().getSound("seeya");
+        if (exitsound != null) {
+            exitsound.play();
+        }
+        
         Rectangle bg = new Rectangle(0, 0, Config.getRES_WIDTH(),
                 Config.getRES_HEIGHT());
         bg.setColor(0, 0, 0, 1.0f);
@@ -1143,6 +1170,20 @@ public class MainScene implements IUpdateHandler {
         }, 3000, TimeUnit.MILLISECONDS);
     }
 
+    public void restart() {
+        MainActivity mActivity = GlobalManager.getInstance().getMainActivity();
+        mActivity.runOnUiThread(() -> new ConfirmDialogFragment().setMessage(R.string.dialog_dither_confirm).showForResult(
+                isAccepted -> {
+                    if (isAccepted) {
+                        Intent mIntent = new Intent(mActivity, MainActivity.class);
+                        mIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        mActivity.startActivity(mIntent);
+                        System.exit(0);
+                    }
+                }
+        ));
+    }
+
     public Scene getScene() {
         return scene;
     }
@@ -1166,13 +1207,13 @@ public class MainScene implements IUpdateHandler {
                 //replay
                 ScoringScene scorescene = GlobalManager.getInstance().getScoring();
                 StatisticV2 stat = replay.getStat();
-                TrackInfo track = LibraryManager.getInstance().findTrackByFileNameAndMD5(replay.getMapfile(), replay.getMd5());
+                TrackInfo track = LibraryManager.getInstance().findTrackByFileNameAndMD5(replay.getMapFile(), replay.getMd5());
                 if (track != null) {
                     GlobalManager.getInstance().getMainScene().setBeatmap(track.getBeatmap());
                     GlobalManager.getInstance().getSongMenu().select();
                     ResourceManager.getInstance().loadBackground(track.getBackground());
-                    ru.nsu.ccfit.zuev.osu.GlobalManager.getInstance().getSongService().preLoad(track.getBeatmap().getMusic());
-                    ru.nsu.ccfit.zuev.osu.GlobalManager.getInstance().getSongService().play();
+                    GlobalManager.getInstance().getSongService().preLoad(track.getBeatmap().getMusic());
+                    GlobalManager.getInstance().getSongService().play();
                     scorescene.load(stat, null, ru.nsu.ccfit.zuev.osu.GlobalManager.getInstance().getSongService(), replayFile, null, track);
                     GlobalManager.getInstance().getEngine().setScene(scorescene.getScene());
                 }

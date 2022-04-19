@@ -5,10 +5,10 @@ import android.graphics.PointF;
 import com.edlplan.andengine.TrianglePack;
 import com.edlplan.framework.math.Vec2;
 import com.edlplan.framework.math.line.LinePath;
-import com.edlplan.osu.support.slider.AbstractSliderBody;
 import com.edlplan.osu.support.slider.SliderBody2D;
 import com.edlplan.osu.support.timing.controlpoint.TimingControlPoint;
 
+import org.anddev.andengine.entity.modifier.AlphaModifier;
 import org.anddev.andengine.entity.modifier.FadeInModifier;
 import org.anddev.andengine.entity.modifier.FadeOutModifier;
 import org.anddev.andengine.entity.modifier.SequenceEntityModifier;
@@ -17,6 +17,7 @@ import org.anddev.andengine.entity.sprite.Sprite;
 import org.anddev.andengine.entity.sprite.batch.SpriteGroup;
 import org.anddev.andengine.opengl.texture.region.TextureRegion;
 import org.anddev.andengine.util.MathUtils;
+import org.anddev.andengine.util.modifier.ease.EaseQuadOut;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -28,8 +29,8 @@ import ru.nsu.ccfit.zuev.osu.Config;
 import ru.nsu.ccfit.zuev.osu.Constants;
 import ru.nsu.ccfit.zuev.osu.RGBColor;
 import ru.nsu.ccfit.zuev.osu.ResourceManager;
-import ru.nsu.ccfit.zuev.osu.SkinJson;
-import ru.nsu.ccfit.zuev.osu.SkinManager;
+import ru.nsu.ccfit.zuev.skins.OsuSkin;
+import ru.nsu.ccfit.zuev.skins.SkinManager;
 import ru.nsu.ccfit.zuev.osu.Utils;
 import ru.nsu.ccfit.zuev.osu.async.SyncTaskManager;
 import ru.nsu.ccfit.zuev.osu.game.GameHelper.SliderPath;
@@ -72,7 +73,7 @@ public class Slider extends GameObject {
     private Sprite followcircle;
 
     private PointF tmpPoint = new PointF();
-    private Float ballAngle = new Float(0);
+    private Float ballAngle = 0f;
     private SpriteGroup group = null;
     private SpriteGroup borderGroup = null;
     private Polygon trackPoly = null;
@@ -81,6 +82,7 @@ public class Slider extends GameObject {
     private float borderPolyVerts[] = null;
 
     private boolean kiai;
+    private boolean isHiddenFadeOutActive = false;
     private RGBColor color = new RGBColor();
     private RGBColor circleColor = color;
 
@@ -94,7 +96,7 @@ public class Slider extends GameObject {
     private float sliderLength;
     private boolean preStageFinish = false;
 
-    private AbstractSliderBody abstractSliderBody = null;
+    private SliderBody2D abstractSliderBody = null;
 
     public Slider() {
         startCircle = SpritePool.getInstance().getSprite("sliderstartcircle");
@@ -147,7 +149,7 @@ public class Slider extends GameObject {
         }
 
         num += 1;
-        if (SkinJson.get().isLimitComboTextLength()) {
+        if (OsuSkin.get().isLimitComboTextLength()) {
             num %= 10;
         }
         number = GameObjectPool.getInstance().getNumber(num);
@@ -186,9 +188,9 @@ public class Slider extends GameObject {
         kiai = GameHelper.isKiai();
         preStageFinish = false;
         color.set(r, g, b);
-        if (!SkinJson.get().isSliderFollowComboColor()) {
+        if (!OsuSkin.get().isSliderFollowComboColor()) {
             circleColor = color;
-            color = new RGBColor(SkinJson.get().getSliderBodyColor());
+            color = new RGBColor(OsuSkin.get().getSliderBodyColor());
         }
 
         if (soundId.length < repeats + 1) {
@@ -306,10 +308,10 @@ public class Slider extends GameObject {
         scene.attachChild(endCircle, 0);
 
         // Ticks
-        //Try to fix silder ticks bug
+        // Try to fix incorrect slider tick count bug
         tickInterval = timing.getBeatLength() * speedMultiplier;
         int tickCount = (int) (maxTime * GameHelper.getTickRate() / tickInterval);
-        if(tickInterval == Float.NaN || tickInterval < GameHelper.getSliderTickLength() / 1000){
+        if(Double.isNaN(tickInterval) || tickInterval < GameHelper.getSliderTickLength() / 1000){
             tickCount = 0;
         }
         if ((maxTime * GameHelper.getTickRate() / tickInterval)
@@ -341,22 +343,21 @@ public class Slider extends GameObject {
 
             abstractSliderBody = new SliderBody2D(superPath);
             abstractSliderBody.setBodyWidth(
-                    Utils.toRes(SkinJson.get().getSliderBodyWidth() - SkinJson.get().getSliderBorderWidth())
+                    Utils.toRes(OsuSkin.get().getSliderBodyWidth() - OsuSkin.get().getSliderBorderWidth())
                             * scale);
-            abstractSliderBody.setBorderWidth(Utils.toRes(SkinJson.get().getSliderBodyWidth()) * scale);
-            abstractSliderBody.setSliderBodyBaseAlpha(SkinJson.get().getSliderBodyBaseAlpha());
+            abstractSliderBody.setBorderWidth(Utils.toRes(OsuSkin.get().getSliderBodyWidth()) * scale);
+            abstractSliderBody.setSliderBodyBaseAlpha(OsuSkin.get().getSliderBodyBaseAlpha());
 
-            if (SkinJson.get().isSliderHintEnable() && abstractSliderBody instanceof SliderBody2D) {
-                if (length > SkinJson.get().getSliderHintShowMinLength()) {
-                    SliderBody2D body2D = (SliderBody2D) abstractSliderBody;
-                    body2D.setEnableHint(true);
-                    body2D.setHintAlpha(SkinJson.get().getSliderHintAlpha());
-                    body2D.setHintWidth(Utils.toRes(SkinJson.get().getSliderHintWidth()));
-                    RGBColor hintColor = SkinJson.get().getSliderHintColor();
+            if (OsuSkin.get().isSliderHintEnable()) {
+                if (length > OsuSkin.get().getSliderHintShowMinLength()) {
+                    abstractSliderBody.setEnableHint(true);
+                    abstractSliderBody.setHintAlpha(OsuSkin.get().getSliderHintAlpha());
+                    abstractSliderBody.setHintWidth(Utils.toRes(OsuSkin.get().getSliderHintWidth()));
+                    RGBColor hintColor = OsuSkin.get().getSliderHintColor();
                     if (hintColor != null) {
-                        body2D.setHintColor(hintColor.r(), hintColor.g(), hintColor.b());
+                        abstractSliderBody.setHintColor(hintColor.r(), hintColor.g(), hintColor.b());
                     } else {
-                        body2D.setHintColor(color.r(), color.g(), color.b());
+                        abstractSliderBody.setHintColor(color.r(), color.g(), color.b());
                     }
                 }
             }
@@ -732,14 +733,15 @@ public class Slider extends GameObject {
         GameObjectPool.getInstance().putSlider(this);
         GameObjectPool.getInstance().putNumber(number);
         scene = null;
+        isHiddenFadeOutActive = false;
     }
 
     private void over() {
         //int type = repeatCount > 0 ? GameObjectListener.SLIDER_REPEAT : GameObjectListener.SLIDER_END;
         repeatCount--;
         // If alpha > 0 means cursor in slider ball bounds
-        if (followcircle.getAlpha() > 0 && replayData == null ||
-                replayData != null && replayData.tickSet.get(tickIndex)) {
+        if (followcircle.getAlpha() > 0 && replayObjectData == null ||
+                replayObjectData != null && replayObjectData.tickSet.get(tickIndex)) {
             if (soundIdIndex < soundId.length)
                 Utils.playHitSound(listener, soundId[soundIdIndex],
                         sampleSet[soundIdIndex], addition[soundIdIndex]);
@@ -815,6 +817,9 @@ public class Slider extends GameObject {
             Slider.this.listener.onSliderHit(id, score, path.points.get(0),
                     path.points.get(path.points.size() - 1), endsCombo, color, GameObjectListener.SLIDER_END);
         }
+        if(!startHit){
+            firstHitAccuracy = (int) (GameHelper.getDifficultyHelper().hitWindowFor50(GameHelper.getDifficulty()) * 1000 + 13);
+        }
         listener.onSliderEnd(id, firstHitAccuracy, tickSet);
         // Remove slider from scene
         SyncTaskManager.getInstance().run(new Runnable() {
@@ -881,9 +886,9 @@ public class Slider extends GameObject {
                 Utils.playHitSound(listener, soundId[0], sampleSet[0], addition[0]);
                 ticksGot++;
                 listener.onSliderHit(id, 30, null, path.points.get(0), false, color, GameObjectListener.SLIDER_START);
-            } else if (replayData != null &&
-                    Math.abs(replayData.accuracy / 1000f) <= GameHelper.getDifficultyHelper().hitWindowFor50(GameHelper.getDifficulty()) &&
-                    passedTime + dt / 2 > replayData.accuracy / 1000f) {
+            } else if (replayObjectData != null &&
+                    Math.abs(replayObjectData.accuracy / 1000f) <= GameHelper.getDifficultyHelper().hitWindowFor50(GameHelper.getDifficulty()) &&
+                    passedTime + dt / 2 > replayObjectData.accuracy / 1000f) {
                 startHit = true;
                 Utils.playHitSound(listener, soundId[0], sampleSet[0], addition[0]);
                 ticksGot++;
@@ -1124,6 +1129,11 @@ public class Slider extends GameObject {
                 startCircle.setAlpha(0);
                 startOverlay.setAlpha(0);
             }
+
+            // Slider body, border, and hint gradually fade in Hidden mod
+            if (GameHelper.isHidden()) {
+                hiddenFadeOut();
+            }
         }
 
         if (ball == null) // if ball still don't exists
@@ -1165,6 +1175,8 @@ public class Slider extends GameObject {
                 inRadius = true;
         }
         followcircle.setAlpha(inRadius ? 1 : 0);
+        listener.onTrackingSliders(inRadius);
+
         tickTime += dt;
         //try fixed big followcircle bug
         float fcscale = scale * (1.1f - 0.1f * tickTime * GameHelper.getTickRate() / timing.getBeatLength());
@@ -1175,8 +1187,8 @@ public class Slider extends GameObject {
         while (ticks.size() > 0 && percentage < 1 - 0.02f / maxTime
                 && tickTime * GameHelper.getTickRate() > tickInterval) {
             tickTime -= tickInterval / GameHelper.getTickRate();
-            if (followcircle.getAlpha() > 0 && replayData == null ||
-                    replayData != null && replayData.tickSet.get(tickIndex)) {
+            if (followcircle.getAlpha() > 0 && replayObjectData == null ||
+                    replayObjectData != null && replayObjectData.tickSet.get(tickIndex)) {
                 Utils.playHitSound(listener, 16);
                 listener.onSliderHit(id, 10, null, ballpos, false, color, GameObjectListener.SLIDER_TICK);
                 ticksGot++;
@@ -1199,12 +1211,62 @@ public class Slider extends GameObject {
         ball.setPosition(ballpos.x - ball.getWidth() / 2,
                 ballpos.y - ball.getHeight() / 2);
         ball.setRotation(ballAngle);
-        if (GameHelper.isAuto() && GameHelper.isFlashLight()) {
-            listener.setFlashLightsPosition(ballpos.x, ballpos.y);
+
+        if (GameHelper.isAuto() || GameHelper.isAutopilotMod()) {
+            listener.updateAutoBasedPos(ballpos.x, ballpos.y);
         }
+
         // If we got 100% time, finishing slider
         if (percentage >= 1) {
             over();
+        }
+    }
+
+    private void hiddenFadeOut() {
+        if (isHiddenFadeOutActive) {
+            return;
+        }
+        isHiddenFadeOutActive = true;
+        final float realDuration = maxTime * repeatCount * GameHelper.getTimeMultiplier();
+        final EaseQuadOut easing = EaseQuadOut.getInstance();
+        if (group != null) {
+            group.registerEntityModifier(new AlphaModifier(realDuration,
+                group.getAlpha(), 0, easing));
+        }
+        if (trackPoly != null) {
+            trackPoly.registerEntityModifier(new AlphaModifier(realDuration,
+                trackPoly.getAlpha(), 0, easing));
+        }
+        if (borderPoly != null) {
+            borderPoly.registerEntityModifier(new AlphaModifier(realDuration,
+                borderPoly.getAlpha(), 0, easing));
+        }
+        if (borderGroup != null) {
+            borderGroup.registerEntityModifier(new AlphaModifier(realDuration,
+                borderGroup.getAlpha(), 0, easing));
+        }
+        if (body != null) {
+            body.registerEntityModifier(new AlphaModifier(realDuration,
+                body.getAlpha(), 0, easing));
+        }
+        if (border != null) {
+            border.registerEntityModifier(new AlphaModifier(realDuration,
+                border.getAlpha(), 0, easing));
+        }
+        for (final Sprite sp : trackSprites) {
+            sp.registerEntityModifier(new AlphaModifier(realDuration,
+                sp.getAlpha(), 0, easing));
+        }
+        for (final Sprite sp : trackBorders) {
+            sp.registerEntityModifier(new AlphaModifier(realDuration,
+                sp.getAlpha(), 0, easing));
+        }
+        for (final Sprite sp : trackBoundaries) {
+            sp.registerEntityModifier(new AlphaModifier(realDuration,
+                sp.getAlpha(), 0, easing));
+        }
+        if (abstractSliderBody != null) {
+            abstractSliderBody.fadeOut(realDuration);
         }
     }
 

@@ -12,18 +12,18 @@ import java.math.BigDecimal;
 import ru.nsu.ccfit.zuev.osu.BeatmapInfo;
 import ru.nsu.ccfit.zuev.osu.RGBColor;
 import ru.nsu.ccfit.zuev.osu.ResourceManager;
-import ru.nsu.ccfit.zuev.osu.SkinJson;
+import ru.nsu.ccfit.zuev.skins.OsuSkin;
 import ru.nsu.ccfit.zuev.osu.TrackInfo;
 import ru.nsu.ccfit.zuev.osu.Utils;
 import ru.nsu.ccfit.zuev.osu.scoring.ScoreLibrary;
 
 public class MenuItemTrack extends Sprite {
 
-    private static RGBColor DEFAULT_COLOR = new RGBColor(25 / 255f, 25 / 255f, 240 / 255f);
-    private static RGBColor SELECTED_COLOR = new RGBColor(1, 1, 1);
+    private static final RGBColor DEFAULT_COLOR = new RGBColor(25 / 255f, 25 / 255f, 240 / 255f);
+    private static final RGBColor SELECTED_COLOR = new RGBColor(1, 1, 1);
 
-    private static RGBColor DEFAULT_TEXT_COLOR = new RGBColor(1, 1, 1);
-    private static RGBColor SELECTED_TEXT_COLOR = new RGBColor(0, 0, 0);
+    private static final RGBColor DEFAULT_TEXT_COLOR = new RGBColor(1, 1, 1);
+    private static final RGBColor SELECTED_TEXT_COLOR = new RGBColor(0, 0, 0);
     private final ChangeableText trackTitle, trackLeftText;
     private final Sprite[] stars;
     private final Sprite halfStar;
@@ -43,8 +43,8 @@ public class MenuItemTrack extends Sprite {
                 ResourceManager.getInstance().getFont("font"), "", 200);
         trackLeftText = new ChangeableText(Utils.toRes(350), Utils.toRes(22),
                 ResourceManager.getInstance().getFont("font"), "", 30);
-        SkinJson.get().getColor("MenuItemVersionsDefaultColor", DEFAULT_COLOR).apply(this);
-        SkinJson.get().getColor("MenuItemDefaultTextColor", DEFAULT_TEXT_COLOR).applyAll(trackTitle, trackLeftText);
+        OsuSkin.get().getColor("MenuItemVersionsDefaultColor", DEFAULT_COLOR).apply(this);
+        OsuSkin.get().getColor("MenuItemDefaultTextColor", DEFAULT_TEXT_COLOR).applyAll(trackTitle, trackLeftText);
         setAlpha(0.8f);
         attachChild(trackTitle);
 //		attachChild(trackLeftText);
@@ -63,7 +63,7 @@ public class MenuItemTrack extends Sprite {
     }
 
     public void setItem(final MenuItem it) {
-        item = new WeakReference<MenuItem>(it);
+        item = new WeakReference<>(it);
     }
 
     public void setTrack(final TrackInfo track, final BeatmapInfo info) {
@@ -125,15 +125,14 @@ public class MenuItemTrack extends Sprite {
     }
 
     public void setDeselectColor() {
-        SkinJson.get().getColor("MenuItemVersionsDefaultColor", DEFAULT_COLOR).apply(this);
-        SkinJson.get().getColor("MenuItemDefaultTextColor", DEFAULT_TEXT_COLOR).applyAll(trackTitle, trackLeftText);
+        OsuSkin.get().getColor("MenuItemVersionsDefaultColor", DEFAULT_COLOR).apply(this);
+        OsuSkin.get().getColor("MenuItemDefaultTextColor", DEFAULT_TEXT_COLOR).applyAll(trackTitle, trackLeftText);
     }
 
     public void setSelectedColor() {
-        SkinJson.get().getColor("MenuItemVersionsSelectedColor", SELECTED_COLOR).apply(this);
-        SkinJson.get().getColor("MenuItemSelectedTextColor", SELECTED_TEXT_COLOR).applyAll(trackTitle, trackLeftText);
+        OsuSkin.get().getColor("MenuItemVersionsSelectedColor", SELECTED_COLOR).apply(this);
+        OsuSkin.get().getColor("MenuItemSelectedTextColor", SELECTED_TEXT_COLOR).applyAll(trackTitle, trackLeftText);
     }
-
 
     @Override
     public boolean onAreaTouched(final TouchEvent pSceneTouchEvent,
@@ -148,12 +147,12 @@ public class MenuItemTrack extends Sprite {
                 item.get().stopScroll(getY() + pTouchAreaLocalY);
             }
             return true;
-        } else if (pSceneTouchEvent.isActionUp() && moved == false) {
+        } else if (pSceneTouchEvent.isActionUp() && !moved) {
             downTime = -1;
             if (item == null) {
                 return true;
             }
-            if (item.get().isTrackSelected(this) == false) {
+            if (!item.get().isTrackSelected(this)) {
                 ResourceManager.getInstance().getSound("menuclick").play();
                 item.get().deselectTrack();
             }
@@ -168,10 +167,9 @@ public class MenuItemTrack extends Sprite {
             setDeselectColor();
             moved = true;
             return false;
-        } else if (pSceneTouchEvent.isActionUp()) {
-            return false;
+        } else {
+            return !pSceneTouchEvent.isActionUp();
         }
-        return true;
     }
 
     void update(final float dt) {

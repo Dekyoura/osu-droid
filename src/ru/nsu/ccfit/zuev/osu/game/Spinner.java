@@ -29,11 +29,11 @@ import ru.nsu.ccfit.zuev.osu.scoring.StatisticV2;
 
 public class Spinner extends GameObject {
     private final Sprite background;
+    public final PointF center;
     private final Sprite circle;
     private final Sprite approachCircle;
     private final Sprite metre;
     private final Sprite spinText;
-    private final PointF center;
     private final TextureRegion mregion;
     private Sprite clearText = null;
     private PointF oldMouse;
@@ -51,6 +51,7 @@ public class Spinner extends GameObject {
     private float metreY;
     private StatisticV2 stat;
     private float totalTime;
+    private boolean did = false;
 
     public Spinner() {
         ResourceManager.getInstance().checkSpinnerTextures();
@@ -186,16 +187,20 @@ public class Spinner extends GameObject {
         }
         listener.removeObject(Spinner.this);
         int score = 0;
-        if (replayData != null) {
-            if (fullrotations < replayData.accuracy / 4)
-                fullrotations = replayData.accuracy / 4;
-            if (fullrotations >= needRotations)
-                clear = true;
-            int bonusRot = (int) (replayData.accuracy / 4 - needRotations + 1);
-            while (bonusRot < score) {
-                bonusRot++;
+        if (replayObjectData != null) {
+            //int bonusRot = (int) (replayData.accuracy / 4 - needRotations + 1);
+            //while (bonusRot < 0) {
+            //    bonusRot++;
+            //    listener.onSpinnerHit(id, 1000, false, 0);
+            //}
+
+            //if (rotations count < the rotations in replay), let rotations count = the rotations in replay
+            while (fullrotations + this.score < replayObjectData.accuracy / 4 + 1){
+                fullrotations++;
                 listener.onSpinnerHit(id, 1000, false, 0);
             }
+            if (fullrotations >= needRotations)
+                clear = true;
         }
         float percentfill = (Math.abs(rotations) + fullrotations)
                 / needRotations;
@@ -212,8 +217,8 @@ public class Spinner extends GameObject {
         if (clear) {
             score = 300;
         }
-        if (replayData != null) {
-            switch (replayData.accuracy % 4) {
+        if (replayObjectData != null) {
+            switch (replayObjectData.accuracy % 4) {
                 case 0:
                     score = 0;
                     break;
@@ -270,11 +275,11 @@ public class Spinner extends GameObject {
             dfill = 5 * 4 * dt;
             circle.setRotation((rotations + dfill / 4f) * 360);
             //auto时，FL光圈绕中心旋转
-            if (GameHelper.isFlashLight()) {
+            if (GameHelper.isAuto() || GameHelper.isAutopilotMod()) {
                float angle = (rotations + dfill / 4f) * 360;
                float pX = center.x + 50 * (float)Math.sin(angle);
                float pY = center.y + 50 * (float)Math.cos(angle);
-               listener.setFlashLightsPosition(pX, pY);
+               listener.updateAutoBasedPos(pX, pY);
             }
         }
         rotations += dfill / 4f;
@@ -310,7 +315,7 @@ public class Spinner extends GameObject {
             }
         } else if (Math.abs(rotations) > 1) {
             rotations -= 1 * Math.signum(rotations);
-            if (replayData == null || replayData.accuracy / 4 > fullrotations) {
+            if (replayObjectData == null || replayObjectData.accuracy / 4 > fullrotations) {
                 fullrotations++;
                 stat.registerSpinnerHit();
                 float rate = 0.375f;
