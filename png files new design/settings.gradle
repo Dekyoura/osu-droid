@@ -1,2 +1,0 @@
-include ':AndEngine', ':LibBASS'
-include ':andnext_markdown'
